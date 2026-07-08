@@ -8,12 +8,13 @@ const WS_BASE = process.env.NEXT_PUBLIC_WS_URL || "ws://localhost:8000";
 
 export function useMarketWebSocket() {
   const wsRef = useRef<WebSocket | null>(null);
-  const reconnectTimer = useRef<ReturnType<typeof setTimeout>>();
+  const reconnectTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const { setStocks, updatePrice, setConnected } = useMarketStore();
   const mountedRef = useRef(true);
 
   const connect = useCallback(() => {
     if (!mountedRef.current) return;
+
     const ws = new WebSocket(`${WS_BASE}/ws/market`);
     wsRef.current = ws;
 
@@ -24,6 +25,7 @@ export function useMarketWebSocket() {
     ws.onmessage = (evt) => {
       try {
         const msg = JSON.parse(evt.data);
+
         if (msg.type === "snapshot") {
           setStocks(msg.stocks as StockSnapshot[]);
         } else if (msg.type === "price_update") {
@@ -34,6 +36,7 @@ export function useMarketWebSocket() {
 
     ws.onclose = () => {
       setConnected(false);
+
       if (mountedRef.current) {
         reconnectTimer.current = setTimeout(connect, 3000);
       }
@@ -62,7 +65,11 @@ export function useMarketWebSocket() {
 
     return () => {
       mountedRef.current = false;
-      clearTimeout(reconnectTimer.current);
+
+      if (reconnectTimer.current) {
+        clearTimeout(reconnectTimer.current);
+      }
+
       wsRef.current?.close();
     };
   }, [connect, setStocks]);
@@ -70,17 +77,19 @@ export function useMarketWebSocket() {
 
 export function useTradeWebSocket(onTrade: (trade: unknown) => void) {
   const wsRef = useRef<WebSocket | null>(null);
-  const reconnectTimer = useRef<ReturnType<typeof setTimeout>>();
+  const reconnectTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const mountedRef = useRef(true);
 
   const connect = useCallback(() => {
     if (!mountedRef.current) return;
+
     const ws = new WebSocket(`${WS_BASE}/ws/trades`);
     wsRef.current = ws;
 
     ws.onmessage = (evt) => {
       try {
         const msg = JSON.parse(evt.data);
+
         if (msg.type === "trade_executed") {
           onTrade(msg.trade);
         }
@@ -92,15 +101,21 @@ export function useTradeWebSocket(onTrade: (trade: unknown) => void) {
         reconnectTimer.current = setTimeout(connect, 3000);
       }
     };
+
     ws.onerror = () => ws.close();
   }, [onTrade]);
 
   useEffect(() => {
     mountedRef.current = true;
     connect();
+
     return () => {
       mountedRef.current = false;
-      clearTimeout(reconnectTimer.current);
+
+      if (reconnectTimer.current) {
+        clearTimeout(reconnectTimer.current);
+      }
+
       wsRef.current?.close();
     };
   }, [connect]);
